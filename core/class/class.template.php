@@ -16,8 +16,28 @@
 			{
 				$this -> customHeaders[] = $row;
 			}
-		}	
-		function init($types = [],$body = [],$site_url = "") {
+		}
+		function sortByPriority($data_array)
+        {
+            $data_to_order = $data_array;
+			usort($data_to_order,function ($item1,$item2) { 
+				if ($item1['priority'] == $item2['priority']) return 0;
+				return ($item1['priority'] < $item2['priority']) ? 1 : -1;
+            });
+			$data_to_order = array_reverse($data_to_order);
+			return $data_to_order;
+        }
+
+		function attributes($input){
+			$output = implode(' ', array_map(
+				function ($v, $k) { return sprintf('%s="%s"', $k, $v); },
+				$input,
+				array_keys($input)
+			));
+			return $output;
+		}
+
+		function init($types = [],$body = [],$site_url = "",$version = '1234567') {
 			if(!empty($this -> customHeaders)) {
 				foreach($this -> customHeaders as $row) {
 					header($row['name'].': '.$row['value']);
@@ -25,78 +45,34 @@
 			}
 			$data = '';
 			$data = "<!DOCTYPE HTML>\r\n";
-			
-			if(is_array($types) && !empty($types)) {
-				$htmlData = '';
-				foreach($types as $k => $v)
-				{
-					$htmlData .= ' '.$k.'="'.$v.'"';
-				}
-				$data .= '<html'.$htmlData.'>'.$this -> nl();
-			} else {
-				$data .= '<html>'.$this -> nl();
-			}
-			$data .= '<head>'.$this -> nl();
-			$data .= '<base href="'.$site_url.'" />'.$this -> nl();
-			$data .= '<title>'.$this -> title.'</title>'.$this -> nl();
-			$data .= '<meta charset="UTF-8">'.$this -> nl();
-			$data .= '<meta http-equiv="X-UA-Compatible" content="IE=edge">'.$this -> nl();
-			$data .= '<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">'.$this -> nl();
+			$data .= '<html'.((is_array($types) && !empty($types)) ? ' '.$this -> attributes($types) : '').'>';
+			$data .= '<head>';
+			$data .= '<base href="'.$site_url.'" />';
+			$data .= '<title>'.$this -> title.'</title>';
+			$data .= '<meta charset="UTF-8">';
+			$data .= '<meta http-equiv="X-UA-Compatible" content="IE=edge">';
+			$data .= '<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">';
 			$data .= '<meta name="theme-color" content="#6777ef">';
-			$data .= '<link rel="manifest" href="/manifest.json">'.$this -> nl();
-			if(!empty($this -> headCustom)) {
-				foreach($this -> headCustom as $head) {
-					$data .= $head.$this -> nl();
-				}
-			}
-			function invenDescSort($item1,$item2)
-			{
-				if ($item1['priority'] == $item2['priority']) return 0;
-				return ($item1['priority'] < $item2['priority']) ? 1 : -1;
-			}
-			
+			$data .= '<link rel="manifest" href="/manifest.json">';
+			$data .= (!empty($this -> headCustom) ? implode('',$this -> headCustom) : '');
 
-			// preload scripts		
-			
+			// Reorder styles
 			if(!empty($this -> styles)) { 
-				$reOrder_styles = $this -> styles;
-				usort($reOrder_styles,'invenDescSort');
-				$_LOAD_STYLES = array_reverse($reOrder_styles);
-				foreach($_LOAD_STYLES as $style)
+				$this -> styles = $this -> sortByPriority($this -> styles);
+				foreach($this -> styles as $style)
 				{
-					$data .= '<link rel="stylesheet" href="'.$style['url'].'">'.$this -> nl();					
 					if(empty($style['url']))continue;
+					$uri = parse_url($style['url']);
+					$style['url'] = htmlspecialchars(isset($uri['query']) ? $style['url'].'&v='.$version : $style['url'].'?v='.$version);
+					$data .= '<link rel="stylesheet" href="'.$style['url'].'">';					
 				}
 			}
-			
 			
 			// load inline styles
-			if(!empty($this -> inline_styles))
-			{
-				$data .= '<style>'.$this -> nl();
-				foreach($this -> inline_styles as $str_inline) {
-					$data .= $str_inline.$this -> nl();
-				}
-				$data .= '</style>'.$this -> nl();
-			}
-			
-			$data .= '</head>'.$this -> nl();
-			
-			if(is_array($body) && !empty($body)) {
-				$bodyData = '';
-				foreach($body as $k => $v)
-				{
-					$bodyData .= ' '.$k.'="'.$v.'"';
-				}
-				$data .= '<body'.$bodyData.'>'.$this -> nl();
-			} else {
-				$data .= '<body>'.$this -> nl();
-			}
-			
-
-			
-			
-			
+			$data .= (!empty($this -> inline_styles) ? '<style>'.implode('',$this -> inline_styles).'</style>' : '');
+			$data .= '</head>';
+			$data .= '<body'.((is_array($body) && !empty($body)) ? ' '.$this -> attributes($body) : '').'>';			
+			// Set body content
 			if(!empty($this -> content)) {
 				foreach($this -> content as $text)
 				{
@@ -104,33 +80,23 @@
 				}
 			}
 			
+			// Reorder scripts
 			if(!empty($this -> scripts)) {
-				$reOrder_scripts = $this -> scripts;
-				usort($reOrder_scripts,'invenDescSort');
-				$_LOAD_SCRIPTS = array_reverse($reOrder_scripts);
-				foreach($_LOAD_SCRIPTS as $script)
+				$this -> scripts = $this -> sortByPriority($this -> scripts);
+				foreach($this -> scripts as $script)
 				{
-					if(empty($script['url']))continue;
-					
-					$data .= '<script src="'.$script['url'].'"></script>'.$this -> nl();
+					if(empty($script['url'])) continue;
+					$uri = parse_url($script['url']);
+					$script['url'] = htmlspecialchars(isset($uri['query']) ? $script['url'].'&v='.$version : $script['url'].'?v='.$version);
+					$data .= '<script src="'.$script['url'].'"></script>';
 				}
 			}
-			if(!empty($this -> inline_scripts)) {
-				$scriptsAll = ''; 
-				foreach($this -> inline_scripts as $str_inline) {
-					$scriptsAll .= $str_inline.$this -> nl();
-				}
-				if(!empty($scriptsAll)) {
-					$data .= '<script>'.$this -> nl();
-					$data .= $scriptsAll;
-					$data .= '</script>'.$this -> nl();
-				}
-			}
-			$data .= '</body>'.$this -> nl();
+			$data .= (!empty($this -> inline_scripts) ? '<script>'.implode('',$this -> inline_scripts).'</script>' : '');
+			$data .= '</body>';
 			$data .= '</html>';
 			echo $data;
 		}
-		function nl() { return "\r\n"; }
+		
 		function setTitle($title) { $this -> title = $title; }
 		function getTitle() { return $this -> title; }
 		function add_script($arrar) { $this -> scripts[] = $arrar; }
@@ -152,26 +118,16 @@
 		function add_content($string) { $this -> content[] = $string; }
 		
 		function renderHTML($file,$dataReplace = ['key' => 'value']) {
-			if(!file_exists($file)) {
-				throw new Exception('File not exists!');
-			} else {
-				$fdat = file_get_contents($file);
-				$search_keys = [];
-				$replace_keys = [];
-				foreach($dataReplace as $k => $v) { $search_keys[] = $k; $replace_keys[] = $v; }
-				$fdat = str_replace($search_keys,$replace_keys,$fdat);
-				$this -> add_content($fdat);
-			}
+			$template_add_render = $this -> render($file,$dataReplace);
+			$this -> add_content($template_add_render);
 		}
+		
 		function render($file,$dataReplace = ['key' => 'value']) {
 			if(!file_exists($file)) {
 				throw new Exception('File not exists!');
 			} else {
 				$fdat = file_get_contents($file);
-				$search_keys = [];
-				$replace_keys = [];
-				foreach($dataReplace as $k => $v) { $search_keys[] = $k; $replace_keys[] = $v; }
-				$fdat = str_replace($search_keys,$replace_keys,$fdat);
+				$fdat = str_replace(array_keys($dataReplace),array_values($dataReplace),$fdat);
 				return $fdat;
 			}
 		}

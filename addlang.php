@@ -3,10 +3,9 @@ define('LOAD_TEMPLATE',false);
 define('GLOBAL_LOADER',true);
 require 'core/global.php';
 try {
-        $template -> add_styles([
-        	['url' => 'https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css','priority' => 1],
+    $template -> add_styles([
+       	['url' => 'https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css','priority' => 1],
 		['url' => 'app-assets/fonts/flag-icon-css/css/flag-icon.min.css','priority' => 2]
-
 	]);
 	$template -> add_scripts([
 		      ['url' => 'assets/js/style-loader.js','priority' => 1],
