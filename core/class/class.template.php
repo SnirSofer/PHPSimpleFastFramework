@@ -9,7 +9,10 @@
 		var $content = [];
 		var $headCustom = [];
 		var $customHeaders = [];
-		
+		var $preloads = [];
+		var $strings = [];
+		var $static_version = '100';
+
 		function setHeaders($data)
 		{
 			foreach($data as $row)
@@ -37,12 +40,52 @@
 			return $output;
 		}
 
-		function init($types = [],$body = [],$site_url = "",$version = '1234567') {
+		private function doLoops() {
 			if(!empty($this -> customHeaders)) {
 				foreach($this -> customHeaders as $row) {
 					header($row['name'].': '.$row['value']);
 				}
 			}
+			if(!empty($this -> styles)) { 
+				$this -> styles = $this -> sortByPriority($this -> styles);
+				foreach($this -> styles as $style)
+				{
+					if(empty($style['url']))continue;
+					$uri = parse_url($style['url']);
+					$style['url'] = htmlspecialchars(isset($uri['query']) ? $style['url'].'&v='.$this -> static_version : $style['url'].'?v='.$this -> static_version);
+					$this -> strings['styles'] .= '<link rel="stylesheet" href="'.$style['url'].'">';
+
+					if(isset($style['preload'])) {
+						$this -> preloads[] = ['url' => $style['url'],'as' => 'style','type' => 'style'];
+						$this -> strings['preload'] .= '<link rel="preload" href="'.$style['url'].'" as="style" type="style">';
+					}
+				}
+			}
+			if(!empty($this -> scripts)) {
+				$this -> scripts = $this -> sortByPriority($this -> scripts);
+				foreach($this -> scripts as $wcripts)
+				{
+					if(empty($wcripts['url'])) continue;
+					$uri = parse_url($wcripts['url']);
+					$wcripts['url'] = htmlspecialchars(isset($uri['query']) ? $wcripts['url'].'&v='.$this -> static_version : $wcripts['url'].'?v='.$this -> static_version);
+					$this -> strings['scripts'] .= '<script src="'.$wcripts['url'].'"'.(isset($wcripts['preload']) ? ' defer' : '').'></script>';
+
+					if(isset($wcripts['preload'])) {
+						$this -> preloads[] = ['url' => $wcripts['url'],'as' => 'script','type' => 'script'];
+						$this -> strings['preload'] .= '<link rel="preload" href="'.$wcript['url'].'" as="script" type="script">';
+					}
+				}
+			}
+			if(!empty($this -> content)) {
+				foreach($this -> content as $text)
+				{
+					$this -> strings['content'] .= $text;
+				}
+			}
+		}
+
+		function init($types = [],$body = [],$site_url = "") {
+			$this -> doLoops();
 			$data = '';
 			$data = "<!DOCTYPE HTML>\r\n";
 			$data .= '<html'.((is_array($types) && !empty($types)) ? ' '.$this -> attributes($types) : '').'>';
@@ -55,42 +98,19 @@
 			$data .= '<meta name="theme-color" content="#6777ef">';
 			$data .= '<link rel="manifest" href="/manifest.json">';
 			$data .= (!empty($this -> headCustom) ? implode('',$this -> headCustom) : '');
-
-			// Reorder styles
-			if(!empty($this -> styles)) { 
-				$this -> styles = $this -> sortByPriority($this -> styles);
-				foreach($this -> styles as $style)
-				{
-					if(empty($style['url']))continue;
-					$uri = parse_url($style['url']);
-					$style['url'] = htmlspecialchars(isset($uri['query']) ? $style['url'].'&v='.$version : $style['url'].'?v='.$version);
-					$data .= '<link rel="stylesheet" href="'.$style['url'].'">';					
-				}
-			}
+			if(!empty($this -> strings['preload'])) $data .= $this -> strings['preload'];
+			if(!empty($this -> strings['styles'])) $data .= $this -> strings['styles'];
 			
 			// load inline styles
 			$data .= (!empty($this -> inline_styles) ? '<style>'.implode('',$this -> inline_styles).'</style>' : '');
 			$data .= '</head>';
 			$data .= '<body'.((is_array($body) && !empty($body)) ? ' '.$this -> attributes($body) : '').'>';			
 			// Set body content
-			if(!empty($this -> content)) {
-				foreach($this -> content as $text)
-				{
-					$data .= $text;
-				}
-			}
+			if(!empty($this -> strings['content'])) $data .= $this -> strings['content'];
 			
 			// Reorder scripts
-			if(!empty($this -> scripts)) {
-				$this -> scripts = $this -> sortByPriority($this -> scripts);
-				foreach($this -> scripts as $script)
-				{
-					if(empty($script['url'])) continue;
-					$uri = parse_url($script['url']);
-					$script['url'] = htmlspecialchars(isset($uri['query']) ? $script['url'].'&v='.$version : $script['url'].'?v='.$version);
-					$data .= '<script src="'.$script['url'].'"></script>';
-				}
-			}
+			if(!empty($this -> strings['scripts'])) $data .= $this -> strings['scripts'];
+			
 			$data .= (!empty($this -> inline_scripts) ? '<script>'.implode('',$this -> inline_scripts).'</script>' : '');
 			$data .= '</body>';
 			$data .= '</html>';
